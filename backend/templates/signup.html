@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+  <body style="font-family:system-ui; padding:2rem; max-width:480px; margin:auto">
+    <h2>Create account</h2>
+
+    {% if form.errors %}
+      <div style="color:#b00; margin-bottom:1rem">
+        Please fix the errors below.
+      </div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit">Sign up</button>
+    </form>
+
+    <p style="margin-top:1rem">
+      <a href="/accounts/login/">Already have an account? Sign in</a>
+    </p>
+  </body>
+</html>

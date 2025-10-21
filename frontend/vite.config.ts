@@ -6,7 +6,11 @@ export default defineConfig({
   server: {
     host: true,            // allow external/inside-container access
     port: 5173,
-    proxy: { "/api": "http://backend:8000" },
+    proxy: {
+      "/api": "http://backend:8000",
+      "/accounts": "http://backend:8000", // <-- kinda funky, but works
+      "/admin": "http://backend:8000"     // <-- kinda funky, but works
+    },
     watch: {
       usePolling: true,    // important for Docker
       interval: 100
