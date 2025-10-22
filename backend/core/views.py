@@ -321,3 +321,91 @@ def preparation_accepted(request):
 @transaction.atomic
 def preparation_rejected(request):
     return _create_order_answer(request, OrderAnswer.OrderAnswerStatus.REJECTED)
+
+
+@login_required
+@require_GET
+def restaurant_info(request):
+    """
+    GET /api/restaurant/
+    Returns restaurant info and employees for the authenticated user's restaurant
+    """
+    try:
+        user_restaurant = AuthUserRestaurant.objects.get(user=request.user)
+        restaurant = user_restaurant.restaurant
+    except AuthUserRestaurant.DoesNotExist:
+        return _bad("User is not linked to any restaurant", status=404)
+
+    # Fetch all employees (users linked to this restaurant)
+    employees = AuthUserRestaurant.objects.filter(restaurant=restaurant).select_related('user')
+    
+    return JsonResponse({
+        "ok": True,
+        "restaurant": {
+            "id": restaurant.id,
+            "name": restaurant.name,
+            "address": restaurant.address,
+            "created_at": restaurant.created_at.isoformat(),
+        },
+        "employees": [
+            {
+                "id": emp.user.id,
+                "username": emp.user.username,
+                "email": emp.user.email,
+                "joined_at": emp.created_at.isoformat(),
+            }
+            for emp in employees
+        ]
+    })
+
+
+@login_required
+@transaction.atomic
+def restaurant_update(request):
+    """
+    PATCH /api/restaurant/
+    Body:
+    {
+      "name": "New Restaurant Name",     // optional
+      "address": "New Address 123"       // optional
+    }
+    Updates restaurant info for the authenticated user's restaurant
+    """
+    if request.method != "PATCH":
+        return _bad("Method not allowed", status=405)
+    
+    try:
+        body = _json(request)
+    except ValueError as e:
+        return _bad(str(e))
+
+    try:
+        user_restaurant = AuthUserRestaurant.objects.get(user=request.user)
+        restaurant = user_restaurant.restaurant
+    except AuthUserRestaurant.DoesNotExist:
+        return _bad("User is not linked to any restaurant", status=404)
+
+    # Update fields if provided
+    if "name" in body:
+        name = body["name"]
+        if not name or not isinstance(name, str):
+            return _bad("name must be a non-empty string")
+        restaurant.name = name
+
+    if "address" in body:
+        address = body["address"]
+        if not isinstance(address, str):
+            return _bad("address must be a string")
+        restaurant.address = address
+
+    restaurant.save()
+
+    return JsonResponse({
+        "ok": True,
+        "restaurant": {
+            "id": restaurant.id,
+            "name": restaurant.name,
+            "address": restaurant.address,
+            "created_at": restaurant.created_at.isoformat(),
+        }
+    })

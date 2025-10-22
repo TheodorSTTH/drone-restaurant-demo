@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
-from core.views import ping, signup, me, protected_data, order_created, order_cancelled, preparation_accepted, preparation_rejected, product_create, product_list
+from core.views import ping, signup, me, protected_data, order_created, order_cancelled, preparation_accepted, preparation_rejected, product_create, product_list, restaurant_info, restaurant_update
 from django.views.generic.base import RedirectView
 
 urlpatterns = [
@@ -19,6 +19,8 @@ urlpatterns = [
     path("api/preparation_rejected/", preparation_rejected),
     path("api/products/", product_list),
     path("api/product_create/", product_create),
+    path("api/restaurant/", restaurant_info),
+    path("api/restaurant/update/", restaurant_update),
     
     path("accounts/profile/", RedirectView.as_view(url="/", permanent=False)),
 ]
