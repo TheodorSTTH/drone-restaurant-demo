@@ -71,7 +71,8 @@ class PreparationStep(models.Model):
 
 class Delivery(models.Model):
     order = models.OneToOneField("Order", on_delete=models.CASCADE, related_name="delivery")
-    has_been_picked_up = models.BooleanField(default=False)
+    estimated_pickup_time = models.DateTimeField()
+    estimated_delivery_time = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

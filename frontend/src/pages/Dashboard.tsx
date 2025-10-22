@@ -28,6 +28,10 @@ interface ApiOrder {
     accepted_at?: string;
     projected_preparation_time_minutes?: number;
     total_delay_minutes?: number;
+    delivery?: {
+        estimated_pickup_time: string;
+        estimated_delivery_time: string;
+    };
 }
 
 function parseIsoToMs(input: string): number {
@@ -41,9 +45,11 @@ function parseIsoToMs(input: string): number {
     return Number.isNaN(t) ? Date.now() : t;
 }
 
-function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated, onAccept, onDecline, onDelay, onDone, onCancel }: { order: ApiOrder; acceptDeclineActions?: boolean; prepActions?: boolean; timerFromCreated?: boolean; onAccept?: (id: number) => void; onDecline?: (id: number) => void; onDelay?: (id: number) => void; onDone?: (id: number) => void; onCancel?: (id: number) => void; }) {
+function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated, showDeliveryCountdown, onAccept, onDecline, onDelay, onDone, onCancel }: { order: ApiOrder; acceptDeclineActions?: boolean; prepActions?: boolean; timerFromCreated?: boolean; showDeliveryCountdown?: boolean; onAccept?: (id: number) => void; onDecline?: (id: number) => void; onDelay?: (id: number) => void; onDone?: (id: number) => void; onCancel?: (id: number) => void; }) {
     const total = order.items.reduce((sum, it) => sum + it.unit_price_NOK * it.quantity, 0);
-    const [elapsed, setElapsed] = useState<string>("");
+    const [elapsed, setElapsed] = useState<number>(0); // minutes
+    const [pickupInMin, setPickupInMin] = useState<number | null>(null);
+    const [deliveryInMin, setDeliveryInMin] = useState<number | null>(null);
 
     useEffect(() => {
         const base = timerFromCreated ? order.created_at : order.accepted_at;
@@ -54,14 +60,30 @@ function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated,
             start = now; // avoid freezing at 00:00 when server time is ahead of client
         }
         const tick = () => {
-            const sec = Math.max(0, Math.floor((Date.now() - start) / 1000));
-            const mm = Math.floor(sec / 60).toString().padStart(2, "0");
-            setElapsed(`${mm}`);
+            const minutes = Math.floor((Date.now() - start) / 1000 / 60);
+            setElapsed(minutes);
         };
         tick();
         const id = setInterval(tick, 1000);
         return () => clearInterval(id);
     }, [order.accepted_at, order.created_at, timerFromCreated]);
+
+    useEffect(() => {
+        if (!showDeliveryCountdown || !order.delivery) return;
+        const tick = () => {
+            const now = Date.now();
+            const pickupMs = parseIsoToMs(order.delivery!.estimated_pickup_time) - now;
+            const deliveryMs = parseIsoToMs(order.delivery!.estimated_delivery_time) - now;
+            setPickupInMin(Math.max(0, Math.ceil(pickupMs / 1000 / 60)));
+            setDeliveryInMin(Math.max(0, Math.ceil(deliveryMs / 1000 / 60)));
+        };
+        tick();
+        const id = setInterval(tick, 1000);
+        return () => clearInterval(id);
+    }, [showDeliveryCountdown, order.delivery?.estimated_pickup_time, order.delivery?.estimated_delivery_time]);
+    const deliveryExpired = order.delivery ? parseIsoToMs(order.delivery.estimated_delivery_time) <= Date.now() : false;
+    if (deliveryExpired) return null;
+
     return (
         <div className="p-4 rounded-lg border bg-card">
             <div className="flex items-start gap-3">
@@ -87,16 +109,24 @@ function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated,
                         <span>{total} NOK</span>
                     </div>
                     {(order.accepted_at && !timerFromCreated) && (
-                        <div className="mt-2 text-xs text-muted-foreground">Has been preparing for {elapsed} minutes</div>
+                        <div className="mt-2 text-xs text-muted-foreground">Has been preparing for {elapsed} min</div>
+                    )}
+                    {prepActions &&<div className="mt-2 text-xs text-muted-foreground">
+                        Should be ready in {Number(order.projected_preparation_time_minutes) + (order.total_delay_minutes ? order.total_delay_minutes : 0) - elapsed} min
+                    </div>}
+                    {showDeliveryCountdown && order.delivery && (
+                        <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                            {pickupInMin !== null && pickupInMin > 0 && (
+                                <div>Pickup in {pickupInMin} min</div>
+                            )}
+                            {pickupInMin !== null && pickupInMin === 0 && deliveryInMin !== null && deliveryInMin > 0 && (
+                                <div>Delivery in {deliveryInMin} min</div>
+                            )}
+                        </div>
                     )}
                     {(timerFromCreated) && (
-                        <div className="mt-2 text-xs text-muted-foreground">Order came in {elapsed} minutes ago</div>
+                        <div className="mt-2 text-xs text-muted-foreground">Order came in {elapsed} min ago</div>
                     )}
-                    {
-                        order.total_delay_minutes && (
-                            <div className="mt-2 text-xs text-muted-foreground">Has been delayed for {order.total_delay_minutes} minutes</div>
-                        )
-                    }
                     {acceptDeclineActions && (
                         <div className="mt-3 flex gap-2 w-full">
                             <Button size="sm" variant="outline" onClick={() => onDecline && onDecline(order.id)}>Decline</Button>
@@ -163,7 +193,23 @@ export default function Dashboard() {
         return () => window.removeEventListener("order:created", onCreated as EventListener);
     }, []);
 
-    const acceptOrder = async (orderId: number) => {
+    const [acceptDialogOpen, setAcceptDialogOpen] = useState(false);
+    const [acceptOrderId, setAcceptOrderId] = useState<number | null>(null);
+    const [projectedMinutes, setProjectedMinutes] = useState<string>("10");
+
+    const openAcceptDialog = (orderId: number) => {
+        setAcceptOrderId(orderId);
+        setProjectedMinutes("10");
+        setAcceptDialogOpen(true);
+    };
+
+    const confirmAccept = async () => {
+        if (!acceptOrderId) return;
+        const minutes = parseInt(projectedMinutes, 10);
+        if (Number.isNaN(minutes) || minutes < 0) {
+            alert("Please enter a valid projected time (minutes)");
+            return;
+        }
         try {
             const res = await fetch("/api/preparation_accepted/", {
                 method: "POST",
@@ -172,12 +218,14 @@ export default function Dashboard() {
                     "Content-Type": "application/json",
                     "X-CSRFToken": csrftoken(),
                 },
-                body: JSON.stringify({ order_id: orderId }),
+                body: JSON.stringify({ order_id: acceptOrderId, projected_preparation_time_minutes: minutes }),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.error || "Failed to accept order");
             }
+            setAcceptDialogOpen(false);
+            setAcceptOrderId(null);
             fetchOrders();
         } catch (e) {
             console.error(e);
@@ -243,7 +291,7 @@ export default function Dashboard() {
                     <p className="text-sm text-muted-foreground">No orders</p>
                 ) : (
                     newOrders.map((o) => (
-                        <OrderCard key={o.id} order={o} acceptDeclineActions timerFromCreated onAccept={acceptOrder} onDecline={declineOrder} />
+                        <OrderCard key={o.id} order={o} acceptDeclineActions timerFromCreated onAccept={openAcceptDialog} onDecline={declineOrder} />
                     ))
                 )}
             </section>
@@ -264,6 +312,24 @@ export default function Dashboard() {
                     ))
                 )}
             </section>
+            <AlertDialog open={acceptDialogOpen} onOpenChange={setAcceptDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Accept order</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Set a projected preparation time (minutes) for this order.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="py-2">
+                        <label className="text-sm font-medium">Projected time (minutes)</label>
+                        <Input type="number" min="0" value={projectedMinutes} onChange={(e) => setProjectedMinutes(e.target.value)} />
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmAccept}>Confirm</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             <AlertDialog open={delayDialogOpen} onOpenChange={setDelayDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -284,10 +350,12 @@ export default function Dashboard() {
             </AlertDialog>
             <section className="space-y-3">
                 <h2 className="text-lg font-semibold">Awaiting pickup</h2>
-                {awaitingPickupOrders.length === 0 ? (
+                {awaitingPickupOrders.filter(o => !o.delivery || parseIsoToMs(o.delivery.estimated_delivery_time) > Date.now()).length === 0 ? (
                     <p className="text-sm text-muted-foreground">No orders awaiting pickup</p>
                 ) : (
-                    awaitingPickupOrders.map((o) => <OrderCard key={o.id} order={o} />)
+                    awaitingPickupOrders
+                        .filter(o => !o.delivery || parseIsoToMs(o.delivery.estimated_delivery_time) > Date.now())
+                        .map((o) => <OrderCard key={o.id} order={o} showDeliveryCountdown />)
                 )}
             </section>
         </div>

@@ -8,6 +8,7 @@ from business_logic.models import (
     AuthUserRestaurant,
     Preparation,
     PreparationStep,
+    Delivery,
 )
 import json
 import uuid
@@ -18,6 +19,8 @@ from django.http import JsonResponse, HttpResponseRedirect, HttpResponseBadReque
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib.auth.decorators import login_required
 from django.middleware.csrf import get_token
+from django.utils import timezone
+from datetime import timedelta
 
 @require_GET
 def ping(request):
@@ -298,10 +301,18 @@ def _create_order_answer(request, status_code: str):
     except Order.DoesNotExist:
         return _bad(f"Order not found: {order_id}", status=404)
 
-    ans = OrderAnswer.objects.create(
-        order=order,
-        status=status_code,
-    )
+    projected_minutes = None
+    try:
+        body = _json(request)
+        projected_minutes = int(body.get("projected_preparation_time_minutes")) if body.get("projected_preparation_time_minutes") is not None else None
+    except Exception:
+        projected_minutes = None
+
+    kwargs = {"order": order, "status": status_code}
+    if projected_minutes is not None and projected_minutes >= 0 and status_code == OrderAnswer.OrderAnswerStatus.ACCEPTED:
+        kwargs["projected_preparation_time_minutes"] = projected_minutes
+
+    ans = OrderAnswer.objects.create(**kwargs)
 
     # Also send a CSRF cookie for subsequent SPA writes
     get_token(request)
@@ -483,6 +494,16 @@ def orders_list(request):
             "created_at": o.created_at.isoformat(),
             "items": items,
         }
+        # Attach delivery info if exists (avoid DoesNotExist from one-to-one access)
+        try:
+            d = o.delivery
+        except Delivery.DoesNotExist:
+            d = None
+        if d is not None:
+            data["delivery"] = {
+                "estimated_pickup_time": d.estimated_pickup_time.isoformat(),
+                "estimated_delivery_time": d.estimated_delivery_time.isoformat(),
+            }
         if include_accepted_at:
             ans = (
                 OrderAnswer.objects
@@ -572,6 +593,19 @@ def preparation_step_create(request):
         prep = Preparation.objects.create(order_answer=ans)
 
     step = PreparationStep.objects.create(preparation=prep, status=status, delaytime_minutes=delay_minutes)
+
+    # If marked as DONE, ensure a Delivery exists with estimated timestamps
+    if status == PreparationStep.PreparationStatus.DONE:
+        # Ensure delivery exists; create with estimated times if missing
+        pickup_time = timezone.now() + timedelta(minutes=5)
+        delivery_time = timezone.now() + timedelta(minutes=15)
+        Delivery.objects.get_or_create(
+            order=order,
+            defaults={
+                "estimated_pickup_time": pickup_time,
+                "estimated_delivery_time": delivery_time,
+            },
+        )
 
     # Provide CSRF cookie for further SPA requests
     get_token(request)
