@@ -1,0 +1,146 @@
+# Project Guide (for future LLMs)
+
+This document is a **high-level** overview of the system so you can reason about it without digging through every file. It intentionally stays light on specifics—assume details (ports, versions, filenames) may drift.
+
+## What we’re building (essence)
+
+A **restaurant worker dashboard** used on an iPad to manage **drone-delivered orders**:
+
+* Customers place orders elsewhere (external system).
+* Workers **accept/reject** orders, then **delay/cancel/complete** them.
+* Completed orders are **placed in the garden**, later **picked up by a drone**.
+
+## Architecture (big picture)
+
+* **Frontend:** React + TypeScript (Vite) single-page app.
+* **Backend:** Django application exposing JSON endpoints and serving server-rendered **auth pages**.
+* **Database:** PostgreSQL.
+* **Reverse proxy / static:** NGINX (serves built frontend; proxies `/api/*`, `/accounts/*`, `/admin/*` to Django).
+* **Containers:** Docker Compose orchestrates `db`, `backend`, and `frontend` (and `frontend-dev` for HMR).
+
+### Why this split
+
+* **Fast dev**: Vite HMR for the SPA; Django dev server auto-reload.
+* **Simple prod**: NGINX serves static assets; Gunicorn serves Django; Postgres runs in its own container.
+* **Same-origin in prod**: Frontend and API share host, so cookies/CSRF are easy; NGINX proxies auth and API routes to Django.
+
+## Key libraries / tools
+
+* **Frontend:** React, TypeScript, react-router-dom, Vite, shadcn/ui (composable UI components), Tailwind CSS.
+* **Backend:** Django (auth, admin, ORM), (optionally) Django REST Framework for APIs if/when needed.
+* **Infra:** Docker, Docker Compose, NGINX, Gunicorn (prod).
+* **Database driver:** psycopg / psycopg2-binary (depending on setup).
+
+> Note: We deliberately use **Django's built-in session auth** with server-rendered pages for login/logout/password reset to avoid building custom auth APIs. No social login.
+
+> **UI Components:** We use **shadcn/ui** for the component library. Components are installed directly into `frontend/src/components/ui/` and can be customized. The sidebar uses the shadcn Sidebar component with collapsible icon mode. Path aliases (`@/*`) map to `src/*` for clean imports.
+
+## Auth model (intended behavior)
+
+* **Login/Logout/Password reset** are handled by Django’s built-in views under `/accounts/…`.
+* The SPA simply links to those URLs.
+* After login, a **session cookie** is set; SPA calls to `/api/*` work.
+* **CSRF:**
+
+  * Dev: Vite runs on `http://localhost:5173`; Django trusts that origin via `CSRF_TRUSTED_ORIGINS`.
+  * SPA POSTs include `X-CSRFToken` (read from the `csrftoken` cookie).
+* **Redirects:** `LOGIN_REDIRECT_URL = "/"`, `LOGOUT_REDIRECT_URL = "/"`. If a protected API is hit unauthenticated, Django redirects to `/accounts/login/?next=…`.
+
+## Routing (frontend & proxy)
+
+* **Frontend routing:** `react-router` with a layout for most pages; **Home** may bypass the layout.
+* **Dev proxy (Vite):** proxies `/api`, `/accounts`, `/admin` → Django; everything else is SPA routes.
+* **Prod (NGINX):** `try_files $uri /index.html;` for SPA; proxy `/api/`, `/accounts/`, `/admin/` (no trailing slash on `proxy_pass` to preserve paths).
+
+## Data model (domain)
+
+Located in a Django app (e.g., `business_logic`). Minimal, worker-centric entities such as:
+
+* **Restaurant** (external id, name, address)
+* **EndUser** (customer external id)
+* **Product** (external id, name, price; we prefer `price_cents` integers)
+* **Order** (external id, restaurant, customer, **status** lifecycle: `PENDING/ACCEPTED/REJECTED/DELAYED/CANCELED/COMPLETED`; timestamps; optional `*_by` FKs to the worker user)
+* **OrderProduct** (items in an order, with quantity and price snapshot)
+* **Preparation** + **PreparationStep** (optional kitchen flow; ordered steps)
+* **Delivery** (placed_in_garden / picked_up)
+* **AuthUserRestaurant** (link Django users to a restaurant; usually one restaurant per user)
+
+Conventions:
+
+* Use Django’s default PKs; keep upstream IDs as `external_id` (unique).
+* FKs to users via `settings.AUTH_USER_MODEL`.
+* Indexes for common filters (status, created_at, restaurant).
+
+## API shape (philosophy)
+
+* Small, **session-protected** JSON endpoints under `/api/*`.
+* Examples:
+
+  * `GET /api/orders?status=PENDING` (list)
+  * `POST /api/orders/:id/accept|reject|delay|cancel|complete` (state transitions)
+  * `GET /api/me` (current user)
+* Responses are plain JSON; the SPA handles UI state.
+
+> If REST grows complex, add **Django REST Framework** gradually. Until then, simple Django views returning `JsonResponse` are fine.
+
+## Environments / workflows
+
+* **Dev (HMR):**
+
+  * `frontend-dev` Vite server on `:5173` (proxy `/api` `/accounts` `/admin`).
+  * Django `runserver` with code mounted; Postgres in Docker.
+  * Visit `http://localhost:5173`.
+* **Prod-ish (local or server):**
+
+  * NGINX serves built assets on `:80`.
+  * Django via Gunicorn on `:8000`.
+  * Postgres persisted in a volume.
+  * Visit `http://<host>/`.
+
+**Compose services** (names may vary):
+
+* `db` (Postgres)
+* `backend` (Django; dev uses `runserver`, prod uses Gunicorn)
+* `frontend` (NGINX serving Vite build; proxies to backend)
+* `frontend-dev` (optional Vite dev server)
+
+## Environment variables (examples; may drift)
+
+* `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`
+* `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`
+* `DJANGO_ALLOWED_HOSTS` (space- or comma-separated)
+* `DJANGO_CSRF_TRUSTED_ORIGINS` (includes `http://localhost:5173` in dev)
+
+## Deployment notes (lightweight)
+
+* DNS points to the server. NGINX listens on 80. Add TLS via Traefik/Caddy/NGINX if needed.
+* Ensure `DJANGO_ALLOWED_HOSTS` includes the production domain.
+* Run migrations on deploy. Static assets for Django admin are collected in the image or on deploy.
+* Data persists via a named Postgres volume.
+
+## Testing & debugging pointers
+
+* **Auth errors 403 (CSRF):** confirm `CSRF_TRUSTED_ORIGINS` and `{% csrf_token %}` in server forms; SPA POSTs send `X-CSRFToken`.
+* **“Failed to reach backend”:** check the proxy rules and the no-trailing-slash `proxy_pass`.
+* **Django 400 Bad Request:** add hostnames to `ALLOWED_HOSTS`.
+* **Ports in use:** adjust host mapping (e.g., use `15432` for Postgres).
+* **Schema changes:** `makemigrations` → `migrate`. Use admin for quick edits.
+
+## Code locations (indicative)
+
+* **Frontend:** `frontend/src/**` (pages, components, routing)
+* **Backend:** `backend/` (`project/` settings/urls; `business_logic/` models; views under `core/` or feature apps)
+* **NGINX config:** `frontend/nginx.conf`
+* **Compose:** `docker-compose.yml` (+ optional `docker-compose.override.yml` for dev)
+
+## Design principles (what to preserve)
+
+* Keep **auth simple** (Django sessions + server pages).
+* Keep **frontend and API same-origin** in prod (simplifies cookies/CSRF).
+* Model **worker actions** as explicit order state transitions with timestamps.
+* Keep the repo **container-first** so a single `docker compose up` can boot the stack.
+* Use **shadcn/ui components** for consistency; customize them in `frontend/src/components/ui/` as needed rather than fighting the framework.
+
+---
+
+> This is intentionally a **guiding map**, not a contract. If pieces change (e.g., DRF adoption, JWT, new entities), keep the same spirit: clear boundaries, minimal friction for local dev, and simple, worker-centric flows.

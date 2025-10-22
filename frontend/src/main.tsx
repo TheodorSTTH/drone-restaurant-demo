@@ -2,13 +2,13 @@ import React, { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import NotFound from './pages/NotFound.tsx';
-import Protected from './components/Protected.tsx';
 import Home from './pages/Home.tsx';
-import Layout from './components/Layout.tsx';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import Dashboard from './pages/Dashboard.tsx';
 import Products from './pages/Products.tsx';
 import Restaurant from './pages/Restaurant.tsx';
+import Layout from './components/layout.tsx';
+import Protected from './components/protected.tsx';
 
 const router = createBrowserRouter([
   { path: "/", element: <Home /> },

@@ -6,13 +6,25 @@ export default function Protected({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
 
   useEffect(() => {
-    fetch("/api/me", { credentials: "include" })
-      .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(() => setOk(true))
-      .catch(() => setOk(false));
+    fetch("/api/me/", { credentials: "include" })
+      .then(r => {
+        console.log("Protected: /api/me status:", r.status, r.ok);
+        return r.ok ? r.json() : Promise.reject(r);
+      })
+      .then((data) => {
+        console.log("Protected: /api/me data:", data);
+        setOk(true);
+      })
+      .catch((error) => {
+        console.error("Protected: /api/me failed:", error);
+        setOk(false);
+      });
   }, []);
 
   if (ok === null) return <p>Loading…</p>;
-  if (!ok) return <Navigate to={`/accounts/login/?next=${encodeURIComponent(loc.pathname)}`} replace />;
-  return children;
+  if (!ok) {
+    console.log("Protected: Redirecting to login, current path:", loc.pathname);
+    return <Navigate to={`/accounts/login/?next=${encodeURIComponent(loc.pathname)}`} replace />;
+  }
+  return <>{children}</>;
 }
