@@ -152,21 +152,21 @@ export default function Restaurant() {
               <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Pencil className="h-4 w-4 mr-2" />
-                  Rediger
+                  Edit
                 </Button>
               </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Rediger restaurantinfo</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Oppdater navn og adresse for restauranten.
+                  Update name and address for the restaurant.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="flex flex-col gap-4 py-4">
                 <div>
-                  <label className="text-sm font-medium">Navn *</label>
+                  <label className="text-sm font-medium">Name *</label>
                   <Input
-                    placeholder="Restaurantnavn"
+                    placeholder="Restaurant name"
                     value={editForm.name}
                     onChange={(e) =>
                       setEditForm({ ...editForm, name: e.target.value })
@@ -174,9 +174,9 @@ export default function Restaurant() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Adresse</label>
+                  <label className="text-sm font-medium">Address</label>
                   <Input
-                    placeholder="Gateadresse 123"
+                    placeholder="Address 123"
                     value={editForm.address}
                     onChange={(e) =>
                       setEditForm({ ...editForm, address: e.target.value })
@@ -185,9 +185,9 @@ export default function Restaurant() {
                 </div>
               </div>
               <AlertDialogFooter>
-                <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleUpdate}>
-                  Lagre
+                  Save
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -199,15 +199,15 @@ export default function Restaurant() {
           <div className="flex gap-3">
             <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Adresse</h3>
-              <p className="text-base">{restaurant.address || "Ingen adresse registrert"}</p>
+              <h3 className="text-sm font-medium text-muted-foreground">Address</h3>
+              <p className="text-base">{restaurant.address || "No address registered"}</p>
             </div>
           </div>
 
           <div className="flex gap-3">
             <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Opprettet</h3>
+              <h3 className="text-sm font-medium text-muted-foreground">Created</h3>
               <p className="text-base">
                 {new Date(restaurant.created_at).toLocaleString("no-NO", {
                   dateStyle: "medium",
@@ -223,12 +223,12 @@ export default function Restaurant() {
       <div className="rounded-lg border bg-card p-6">
         <div className="flex items-center gap-3 mb-4">
           <Users className="h-6 w-6 text-primary" />
-          <h3 className="text-xl font-semibold">Ansatte</h3>
+          <h3 className="text-xl font-semibold">Employees</h3>
           <span className="text-sm text-muted-foreground">({employees.length})</span>
         </div>
 
         {employees.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Ingen ansatte registrert</p>
+          <p className="text-sm text-muted-foreground">No employees registered</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-3">
             {employees.map((employee) => (
@@ -244,7 +244,7 @@ export default function Restaurant() {
                     <p className="text-sm text-muted-foreground">{employee.email}</p>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
-                    Member since{" "}
+                    Joined since{" "}
                     {new Date(employee.joined_at).toLocaleDateString("en-US", {
                       dateStyle: "medium",
                     })}

@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 import AppSidebar from "./sidebar";
+import AddOrderMockData from "./add-order-mock-data";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 
@@ -31,6 +32,7 @@ export default function Layout() {
           <Outlet />
         </main>
       </SidebarInset>
+      <AddOrderMockData />
     </SidebarProvider>
   );
 }

@@ -1,5 +1,12 @@
 from business_logic.models import (
-    EndUser, Product, Order, OrderProduct, OrderAnswer, Restaurant, AuthUserRestaurant
+    EndUser,
+    Product,
+    Order,
+    OrderProduct,
+    OrderAnswer,
+    Restaurant,
+    AuthUserRestaurant,
+    PreparationStep,
 )
 import json
 import uuid
@@ -416,3 +423,62 @@ def restaurant_update(request):
             "created_at": restaurant.created_at.isoformat(),
         }
     })
+
+
+@login_required
+@require_GET
+def orders_list(request):
+    """
+    GET /api/orders/
+    Returns three groups of orders for the authenticated user's restaurant:
+    - all_orders
+    - in_progress_orders (has an accepted OrderAnswer)
+    - awaiting_pickup_orders (has a PreparationStep with status DONE)
+    """
+    # Identify restaurant for current user
+    try:
+        user_restaurant = AuthUserRestaurant.objects.get(user=request.user)
+        restaurant = user_restaurant.restaurant
+    except AuthUserRestaurant.DoesNotExist:
+        return _bad("User is not linked to any restaurant", status=404)
+
+    # Base queryset: orders that include at least one product from this restaurant
+    base_qs = (
+        Order.objects
+        .filter(order_products__product__restaurant=restaurant)
+        .distinct()
+        .order_by("-created_at")
+    )
+
+    in_progress_qs = base_qs.filter(order_answers__status=OrderAnswer.OrderAnswerStatus.ACCEPTED).distinct()
+    awaiting_pickup_qs = base_qs.filter(
+        order_answers__preparations__steps__status=PreparationStep.PreparationStatus.DONE
+    ).distinct()
+    # Orders with no answers yet (new/unprocessed)
+    new_orders_qs = base_qs.filter(order_answers__isnull=True).distinct()
+
+    def serialize_order(o: Order):
+        items = [
+            {
+                "product_id": op.product.id,
+                "product_name": op.product.name,
+                "quantity": op.quantity,
+                "unit_price_NOK": op.unit_price_NOK,
+            }
+            for op in o.order_products.select_related("product").all()
+        ]
+        return {
+            "id": o.id,
+            "created_at": o.created_at.isoformat(),
+            "items": items,
+        }
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "all_orders": [serialize_order(o) for o in base_qs],
+            "new_orders": [serialize_order(o) for o in new_orders_qs],
+            "in_progress_orders": [serialize_order(o) for o in in_progress_qs],
+            "awaiting_pickup_orders": [serialize_order(o) for o in awaiting_pickup_qs],
+        }
+    )

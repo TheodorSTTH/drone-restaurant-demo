@@ -1,1 +1,3 @@
 .env
+
+# we have some nested .gitignore files as well
