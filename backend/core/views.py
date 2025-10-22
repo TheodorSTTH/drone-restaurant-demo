@@ -60,7 +60,8 @@ def me(request):
         "email": user.email,
         "restaurant_id": restaurant_id,
         "restaurant_name": restaurant_name,
-        "is_admin": user.is_staff or user.is_superuser
+        "is_admin": user.is_staff or user.is_superuser,
+        "date_joined": getattr(user, "date_joined", None).isoformat() if getattr(user, "date_joined", None) else None
     })
 
 @login_required

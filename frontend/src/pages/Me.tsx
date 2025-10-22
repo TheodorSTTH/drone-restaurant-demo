@@ -8,6 +8,7 @@ interface UserData {
     restaurant_id: number | null;
     restaurant_name: string | null;
     is_admin: boolean;
+    date_joined?: string | null;
 }
 
 export default function Me() {
@@ -62,6 +63,13 @@ export default function Me() {
                     <label className="text-sm font-medium text-gray-500">Admin</label>
                     <p className="text-lg">{userData.is_admin ? 'Yes' : 'No'}</p>
                 </div>
+
+                {userData.date_joined && (
+                    <div>
+                        <label className="text-sm font-medium text-gray-500">Joined</label>
+                        <p className="text-lg">{new Date(userData.date_joined).toLocaleDateString()}</p>
+                    </div>
+                )}
                 
                 {userData.restaurant_name ? (
                     <div>
