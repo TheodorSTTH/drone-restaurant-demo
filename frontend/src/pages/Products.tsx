@@ -32,6 +32,7 @@ export default function Products() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [noRestaurant, setNoRestaurant] = useState(false);
 
   // Form state for new product
   const [newProduct, setNewProduct] = useState({
@@ -47,11 +48,17 @@ export default function Products() {
 
   const fetchProducts = async () => {
     setIsLoading(true);
+    setNoRestaurant(false);
     try {
       const response = await fetch("/api/products/", { credentials: "include" });
       if (response.ok) {
         const data = await response.json();
         setProducts(data.products);
+      } else if (response.status === 404) {
+        const errorData = await response.json();
+        if (errorData.error?.includes("not linked to any restaurant")) {
+          setNoRestaurant(true);
+        }
       } else {
         console.error("Feil ved henting av produkter");
       }
@@ -98,6 +105,18 @@ export default function Products() {
       alert("Could not create product.");
     }
   };
+
+  if (noRestaurant) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center text-muted-foreground">
+          <Package className="h-16 w-16 mx-auto mb-4 opacity-20" />
+          <p className="text-lg">No restaurant linked</p>
+          <p className="text-sm mt-2">Please contact an administrator to link your account to a restaurant.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex gap-4 h-full">

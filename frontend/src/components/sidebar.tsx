@@ -1,8 +1,10 @@
-import { LayoutDashboard, Package, Store } from "lucide-react";
+import { LayoutDashboard, Package, Store, User } from "lucide-react";
 import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -31,6 +33,20 @@ const menuItems = [
 
 export default function AppSidebar() {
   const location = useLocation();
+  const [username, setUsername] = useState<string>('Me');
+  
+  useEffect(() => {
+    fetch('/api/me/', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then(data => {
+        if (data.username) {
+          setUsername(data.username);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch user info:', err);
+      });
+  }, []);
   
   return (
     <Sidebar collapsible="icon">
@@ -66,6 +82,18 @@ export default function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild className={location.pathname === "/me" ? "bg-primary!" : ""} isActive={location.pathname === "/me"}>
+              <Link to="/me" className={location.pathname === "/me" ? "bg-primary!" : ""}>
+                <User className={location.pathname === "/me" ? "text-white" : ""} />
+                <span className={location.pathname === "/me" ? "text-white" : ""}>{username}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   )
 }

@@ -48,7 +48,8 @@ def me(request):
         "username": user.username,
         "email": user.email,
         "restaurant_id": restaurant_id,
-        "restaurant_name": restaurant_name
+        "restaurant_name": restaurant_name,
+        "is_admin": user.is_staff or user.is_superuser
     })
 
 @login_required
@@ -341,6 +342,7 @@ def restaurant_info(request):
     
     return JsonResponse({
         "ok": True,
+        "is_admin": request.user.is_staff or request.user.is_superuser,
         "restaurant": {
             "id": restaurant.id,
             "name": restaurant.name,
@@ -370,9 +372,14 @@ def restaurant_update(request):
       "address": "New Address 123"       // optional
     }
     Updates restaurant info for the authenticated user's restaurant
+    Only allowed for admin users (staff or superuser)
     """
     if request.method != "PATCH":
         return _bad("Method not allowed", status=405)
+    
+    # Check if user is admin
+    if not (request.user.is_staff or request.user.is_superuser):
+        return _bad("Only administrators can update restaurant details", status=403)
     
     try:
         body = _json(request)

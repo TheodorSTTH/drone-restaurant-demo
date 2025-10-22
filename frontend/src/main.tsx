@@ -9,6 +9,7 @@ import Products from './pages/Products.tsx';
 import Restaurant from './pages/Restaurant.tsx';
 import Layout from './components/layout.tsx';
 import Protected from './components/protected.tsx';
+import Me from './pages/Me.tsx';
 
 const router = createBrowserRouter([
   { path: "/", element: <Home /> },
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
       { path: "dashboard", element: <Protected><Dashboard /></Protected> },
       { path: "products",  element: <Protected><Products /></Protected> },
       { path: "restaurant", element: <Protected><Restaurant /></Protected> },
+      { path: "me", element: <Protected><Me /></Protected> },
     ],
   },
 

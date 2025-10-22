@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Building2, Users, MapPin, Pencil, Calendar } from "lucide-react";
+import { Building2, Users, MapPin, Pencil, Calendar, Package } from "lucide-react";
 import { csrftoken } from "@/csrf";
 
 interface RestaurantData {
@@ -31,6 +31,7 @@ interface Employee {
 
 interface RestaurantResponse {
   ok: boolean;
+  is_admin: boolean;
   restaurant: RestaurantData;
   employees: Employee[];
 }
@@ -40,6 +41,7 @@ export default function Restaurant() {
 
   const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -61,6 +63,7 @@ export default function Restaurant() {
         const data: RestaurantResponse = await response.json();
         setRestaurant(data.restaurant);
         setEmployees(data.employees);
+        setIsAdmin(data.is_admin);
         setEditForm({
           name: data.restaurant.name,
           address: data.restaurant.address,
@@ -120,7 +123,11 @@ export default function Restaurant() {
   if (!restaurant) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">Ingen restaurant funnet</p>
+        <div className="text-center text-muted-foreground">
+          <Package className="h-16 w-16 mx-auto mb-4 opacity-20" />
+          <p className="text-lg">No restaurant linked</p>
+          <p className="text-sm mt-2">Please contact an administrator to link your account to a restaurant.</p>
+        </div>
       </div>
     );
   }
@@ -140,13 +147,14 @@ export default function Restaurant() {
             </div>
           </div>
 
-          <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Pencil className="h-4 w-4 mr-2" />
-                Rediger
-              </Button>
-            </AlertDialogTrigger>
+          {isAdmin && (
+            <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Rediger
+                </Button>
+              </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Rediger restaurantinfo</AlertDialogTitle>
@@ -184,6 +192,7 @@ export default function Restaurant() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          )}
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
