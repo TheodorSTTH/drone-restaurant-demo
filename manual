@@ -61,8 +61,9 @@ Located in a Django app (e.g., `business_logic`). Minimal, worker-centric entiti
 * **Product** (external id, name, price; we prefer `price_cents` integers)
 * **Order** (external id, restaurant, customer, **status** lifecycle: `PENDING/ACCEPTED/REJECTED/DELAYED/CANCELED/COMPLETED`; timestamps; optional `*_by` FKs to the worker user)
 * **OrderProduct** (items in an order, with quantity and price snapshot)
-* **Preparation** + **PreparationStep** (optional kitchen flow; ordered steps)
-* **Delivery** (placed_in_garden / picked_up)
+* **OrderAnswer** (accepted/rejected decision; holds `projected_preparation_time_minutes`)
+* **Preparation** + **PreparationStep** (optional kitchen flow; ordered steps; steps carry `delaytime_minutes` and status `de`/`d`/`c`)
+* **Delivery** (`estimated_pickup_time` / `estimated_delivery_time`)
 * **AuthUserRestaurant** (link Django users to a restaurant; usually one restaurant per user)
 
 Conventions:
@@ -74,11 +75,33 @@ Conventions:
 ## API shape (philosophy)
 
 * Small, **session-protected** JSON endpoints under `/api/*`.
-* Examples:
+* Current endpoints used by the SPA:
 
-  * `GET /api/orders?status=PENDING` (list)
-  * `POST /api/orders/:id/accept|reject|delay|cancel|complete` (state transitions)
-  * `GET /api/me` (current user)
+*  - `GET /api/me/`
+*    - Returns current user: `id`, `username`, `email`, `restaurant_id`, `restaurant_name`, `is_admin`, `date_joined`.
+
+*  - `GET /api/products/`
+*  - `POST /api/product_create/`
+
+*  - `GET /api/orders/`
+*    - Returns grouped order lists for the user's restaurant:
+*      - `new_orders`: no answers yet
+*      - `in_progress_orders`: accepted answer, no DONE/CANCELLED step
+*      - `awaiting_pickup_orders`: has a DONE step
+*    - Order fields: `id`, `created_at`, `items[] { product_id, product_name, quantity, unit_price_NOK }`.
+*    - For in-progress: `accepted_at`, `projected_preparation_time_minutes`, `total_delay_minutes`.
+*    - If delivery exists: `delivery { estimated_pickup_time, estimated_delivery_time }`.
+
+*  - `POST /api/preparation_accepted/`
+*    - Body: `{ order_id, projected_preparation_time_minutes? }`.
+
+*  - `POST /api/preparation_rejected/`
+*    - Body: `{ order_id }`.
+
+*  - `POST /api/preparation_step/`
+*    - Body: `{ order_id, status: "de"|"d"|"c", delaytime_minutes?: number }`.
+*    - Side-effect: when `status="d"`, a `Delivery` is created (if missing) with pickup in 5 min and delivery in 15 min.
+
 * Responses are plain JSON; the SPA handles UI state.
 
 > If REST grows complex, add **Django REST Framework** gradually. Until then, simple Django views returning `JsonResponse` are fine.
