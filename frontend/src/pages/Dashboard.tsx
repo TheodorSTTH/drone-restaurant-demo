@@ -14,10 +14,42 @@ interface ApiOrder {
     id: number;
     created_at: string;
     items: ApiOrderItem[];
+    accepted_at?: string;
 }
 
-function OrderCard({ order, showActions, onAccept, onDecline }: { order: ApiOrder; showActions?: boolean; onAccept?: (id: number) => void; onDecline?: (id: number) => void; }) {
+function parseIsoToMs(input: string): number {
+    // Try native parse first
+    let t = Date.parse(input);
+    if (!Number.isNaN(t)) return t;
+    // Trim microseconds to milliseconds and ensure Z suffix
+    const trimmed = input.replace(/(\.\d{3})\d+/, "$1");
+    const withZ = /Z$/.test(trimmed) ? trimmed : trimmed + "Z";
+    t = Date.parse(withZ);
+    return Number.isNaN(t) ? Date.now() : t;
+}
+
+function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated, onAccept, onDecline, onDelay, onDone, onCancel }: { order: ApiOrder; acceptDeclineActions?: boolean; prepActions?: boolean; timerFromCreated?: boolean; onAccept?: (id: number) => void; onDecline?: (id: number) => void; onDelay?: (id: number) => void; onDone?: (id: number) => void; onCancel?: (id: number) => void; }) {
     const total = order.items.reduce((sum, it) => sum + it.unit_price_NOK * it.quantity, 0);
+    const [elapsed, setElapsed] = useState<string>("");
+
+    useEffect(() => {
+        const base = timerFromCreated ? order.created_at : order.accepted_at;
+        if (!base) return;
+        let start = parseIsoToMs(base);
+        const now = Date.now();
+        if (start > now) {
+            start = now; // avoid freezing at 00:00 when server time is ahead of client
+        }
+        const tick = () => {
+            const sec = Math.max(0, Math.floor((Date.now() - start) / 1000));
+            const mm = Math.floor(sec / 60).toString().padStart(2, "0");
+            const ss = (sec % 60).toString().padStart(2, "0");
+            setElapsed(`${mm}:${ss}`);
+        };
+        tick();
+        const id = setInterval(tick, 1000);
+        return () => clearInterval(id);
+    }, [order.accepted_at, order.created_at, timerFromCreated]);
     return (
         <div className="p-4 rounded-lg border bg-card">
             <div className="flex items-start gap-3">
@@ -37,14 +69,27 @@ function OrderCard({ order, showActions, onAccept, onDecline }: { order: ApiOrde
                             </div>
                         ))}
                     </div>
+                    {(order.accepted_at && !timerFromCreated) && (
+                        <div className="mt-2 text-xs text-muted-foreground">Time since accepted: {elapsed}</div>
+                    )}
+                    {(timerFromCreated) && (
+                        <div className="mt-2 text-xs text-muted-foreground">Time since created: {elapsed}</div>
+                    )}
                     <div className="mt-3 flex justify-between text-sm font-semibold">
                         <span>Total</span>
                         <span>{total} NOK</span>
                     </div>
-                    {showActions && (
+                    {acceptDeclineActions && (
                         <div className="mt-3 flex gap-2 w-full">
                             <Button size="sm" variant="outline" onClick={() => onDecline && onDecline(order.id)}>Decline</Button>
                             <Button size="sm" className="grow" variant="default" onClick={() => onAccept && onAccept(order.id)}>Accept</Button>
+                        </div>
+                    )}
+                    {prepActions && (
+                        <div className="mt-3 flex gap-2 w-full">
+                            <Button size="sm" variant="secondary" onClick={() => onDelay && onDelay(order.id)}>Delay</Button>
+                            <Button size="sm" variant="destructive" onClick={() => onCancel && confirm("Are you sure you want to cancel this order?") && onCancel(order.id)}>Cancel</Button>
+                            <Button size="sm" className="grow" variant="default" onClick={() => onDone && onDone(order.id)}>Done</Button>
                         </div>
                     )}
                 </div>
@@ -123,6 +168,28 @@ export default function Dashboard() {
         }
     };
 
+    const createPrepStep = async (orderId: number, status: "de"|"d"|"c") => {
+        try {
+            const res = await fetch("/api/preparation_step/", {
+                method: "POST",
+                credentials: "include",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrftoken(),
+                },
+                body: JSON.stringify({ order_id: orderId, status }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || "Failed to create preparation step");
+            }
+            fetchOrders();
+        } catch (e) {
+            console.error(e);
+            alert("Could not update preparation");
+        }
+    };
+
     useEffect(() => { document.title = "Kyte - Dashboard"; }, []);
 
     if (loading) {
@@ -137,7 +204,7 @@ export default function Dashboard() {
                     <p className="text-sm text-muted-foreground">No orders</p>
                 ) : (
                     newOrders.map((o) => (
-                        <OrderCard key={o.id} order={o} showActions onAccept={acceptOrder} onDecline={declineOrder} />
+                        <OrderCard key={o.id} order={o} acceptDeclineActions timerFromCreated onAccept={acceptOrder} onDecline={declineOrder} />
                     ))
                 )}
             </section>
@@ -146,7 +213,16 @@ export default function Dashboard() {
                 {inProgressOrders.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No orders in progress</p>
                 ) : (
-                    inProgressOrders.map((o) => <OrderCard key={o.id} order={o} />)
+                    inProgressOrders.map((o) => (
+                        <OrderCard
+                            key={o.id}
+                            order={o}
+                            prepActions
+                            onDelay={(id) => createPrepStep(id, "de")}
+                            onDone={(id) => createPrepStep(id, "d")}
+                            onCancel={(id) => createPrepStep(id, "c")}
+                        />
+                    ))
                 )}
             </section>
             <section className="space-y-3">

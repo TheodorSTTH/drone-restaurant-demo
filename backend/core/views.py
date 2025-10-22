@@ -6,6 +6,7 @@ from business_logic.models import (
     OrderAnswer,
     Restaurant,
     AuthUserRestaurant,
+    Preparation,
     PreparationStep,
 )
 import json
@@ -450,14 +451,24 @@ def orders_list(request):
         .order_by("-created_at")
     )
 
-    in_progress_qs = base_qs.filter(order_answers__status=OrderAnswer.OrderAnswerStatus.ACCEPTED).distinct()
+    in_progress_qs = (
+        base_qs
+        .filter(order_answers__status=OrderAnswer.OrderAnswerStatus.ACCEPTED)
+        .exclude(
+            order_answers__preparations__steps__status__in=[
+                PreparationStep.PreparationStatus.DONE,
+                PreparationStep.PreparationStatus.CANCELLED,
+            ]
+        )
+        .distinct()
+    )
     awaiting_pickup_qs = base_qs.filter(
         order_answers__preparations__steps__status=PreparationStep.PreparationStatus.DONE
     ).distinct()
     # Orders with no answers yet (new/unprocessed)
     new_orders_qs = base_qs.filter(order_answers__isnull=True).distinct()
 
-    def serialize_order(o: Order):
+    def serialize_order(o: Order, include_accepted_at: bool = False):
         items = [
             {
                 "product_id": op.product.id,
@@ -467,18 +478,101 @@ def orders_list(request):
             }
             for op in o.order_products.select_related("product").all()
         ]
-        return {
+        data = {
             "id": o.id,
             "created_at": o.created_at.isoformat(),
             "items": items,
         }
+        if include_accepted_at:
+            ans = (
+                OrderAnswer.objects
+                .filter(order=o, status=OrderAnswer.OrderAnswerStatus.ACCEPTED)
+                .order_by("-created_at")
+                .first()
+            )
+            if ans:
+                data["accepted_at"] = ans.created_at.isoformat()
+        return data
 
     return JsonResponse(
         {
             "ok": True,
             "all_orders": [serialize_order(o) for o in base_qs],
             "new_orders": [serialize_order(o) for o in new_orders_qs],
-            "in_progress_orders": [serialize_order(o) for o in in_progress_qs],
+            "in_progress_orders": [serialize_order(o, include_accepted_at=True) for o in in_progress_qs],
             "awaiting_pickup_orders": [serialize_order(o) for o in awaiting_pickup_qs],
         }
     )
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def preparation_step_create(request):
+    """
+    POST /api/preparation_step/
+    Body: { "order_id": 123, "status": "de"|"d"|"c" }
+    Creates a PreparationStep for the given order. If no Preparation exists on the
+    accepted OrderAnswer, a Preparation will be created.
+    """
+    try:
+        body = _json(request)
+    except ValueError as e:
+        return _bad(str(e))
+
+    order_id = body.get("order_id")
+    status = body.get("status")
+    if not order_id:
+        return _bad("order_id is required")
+    if status not in {
+        PreparationStep.PreparationStatus.DELAYED,
+        PreparationStep.PreparationStatus.DONE,
+        PreparationStep.PreparationStatus.CANCELLED,
+    }:
+        return _bad("invalid status; must be one of: de, d, c")
+
+    # Find order
+    try:
+        order = Order.objects.get(id=order_id)
+    except Order.DoesNotExist:
+        return _bad(f"Order not found: {order_id}", status=404)
+
+    # Ensure the order belongs to the current user's restaurant
+    try:
+        user_restaurant = AuthUserRestaurant.objects.get(user=request.user)
+        restaurant = user_restaurant.restaurant
+    except AuthUserRestaurant.DoesNotExist:
+        return _bad("User is not linked to any restaurant", status=404)
+
+    if not order.order_products.filter(product__restaurant=restaurant).exists():
+        return _bad("Order does not belong to your restaurant", status=403)
+
+    # Find accepted answer
+    ans = (
+        OrderAnswer.objects
+        .filter(order=order, status=OrderAnswer.OrderAnswerStatus.ACCEPTED)
+        .order_by("-created_at")
+        .first()
+    )
+    if not ans:
+        return _bad("Order is not in progress (no accepted answer)", status=409)
+
+    # Find or create preparation
+    prep = ans.preparations.first()
+    if prep is None:
+        prep = Preparation.objects.create(order_answer=ans)
+
+    step = PreparationStep.objects.create(preparation=prep, status=status)
+
+    # Provide CSRF cookie for further SPA requests
+    get_token(request)
+
+    return JsonResponse({
+        "ok": True,
+        "preparation": {"id": prep.id},
+        "step": {
+            "id": step.id,
+            "status": step.status,
+            "created_at": step.created_at.isoformat(),
+        },
+    }, status=201)
