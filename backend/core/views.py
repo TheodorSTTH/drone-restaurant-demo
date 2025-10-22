@@ -492,6 +492,12 @@ def orders_list(request):
             )
             if ans:
                 data["accepted_at"] = ans.created_at.isoformat()
+                data["projected_preparation_time_minutes"] = getattr(ans, "projected_preparation_time_minutes", None)
+                # Sum delay minutes across all steps for preparations under this answer
+                total_delay = 0
+                for prep in ans.preparations.all():
+                    total_delay += sum(s.delaytime_minutes for s in prep.steps.all())
+                data["total_delay_minutes"] = total_delay
         return data
 
     return JsonResponse(
@@ -522,6 +528,7 @@ def preparation_step_create(request):
 
     order_id = body.get("order_id")
     status = body.get("status")
+    delay_minutes = int(body.get("delaytime_minutes", 0) or 0)
     if not order_id:
         return _bad("order_id is required")
     if status not in {
@@ -530,6 +537,8 @@ def preparation_step_create(request):
         PreparationStep.PreparationStatus.CANCELLED,
     }:
         return _bad("invalid status; must be one of: de, d, c")
+    if delay_minutes < 0:
+        return _bad("delaytime_minutes must be >= 0")
 
     # Find order
     try:
@@ -562,10 +571,15 @@ def preparation_step_create(request):
     if prep is None:
         prep = Preparation.objects.create(order_answer=ans)
 
-    step = PreparationStep.objects.create(preparation=prep, status=status)
+    step = PreparationStep.objects.create(preparation=prep, status=status, delaytime_minutes=delay_minutes)
 
     # Provide CSRF cookie for further SPA requests
     get_token(request)
+
+    # compute updated total delay minutes
+    total_delay = 0
+    for p in ans.preparations.all():
+        total_delay += sum(s.delaytime_minutes for s in p.steps.all())
 
     return JsonResponse({
         "ok": True,
@@ -574,5 +588,7 @@ def preparation_step_create(request):
             "id": step.id,
             "status": step.status,
             "created_at": step.created_at.isoformat(),
+            "delaytime_minutes": step.delaytime_minutes,
         },
+        "total_delay_minutes": total_delay,
     }, status=201)

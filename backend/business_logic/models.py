@@ -45,6 +45,7 @@ class OrderAnswer(models.Model):
     order = models.ForeignKey("Order", on_delete=models.CASCADE, related_name="order_answers")
     status = models.CharField(max_length=2, choices=OrderAnswerStatus.choices, default=OrderAnswerStatus.ACCEPTED)
     created_at = models.DateTimeField(auto_now_add=True)
+    projected_preparation_time_minutes = models.PositiveIntegerField(default=10)
     
     def __str__(self):
         return f"OrderAnswer #{self.pk}"
@@ -62,6 +63,7 @@ class PreparationStep(models.Model):
         CANCELLED = "c", "Cancelled"
     preparation = models.ForeignKey("Preparation", on_delete=models.CASCADE, related_name="steps")
     status = models.CharField(max_length=2, choices=PreparationStatus.choices, default=PreparationStatus.DELAYED)
+    delaytime_minutes = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

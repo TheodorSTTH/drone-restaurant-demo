@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { csrftoken } from "@/csrf";
 
 interface ApiOrderItem {
@@ -15,6 +26,8 @@ interface ApiOrder {
     created_at: string;
     items: ApiOrderItem[];
     accepted_at?: string;
+    projected_preparation_time_minutes?: number;
+    total_delay_minutes?: number;
 }
 
 function parseIsoToMs(input: string): number {
@@ -43,8 +56,7 @@ function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated,
         const tick = () => {
             const sec = Math.max(0, Math.floor((Date.now() - start) / 1000));
             const mm = Math.floor(sec / 60).toString().padStart(2, "0");
-            const ss = (sec % 60).toString().padStart(2, "0");
-            setElapsed(`${mm}:${ss}`);
+            setElapsed(`${mm}`);
         };
         tick();
         const id = setInterval(tick, 1000);
@@ -59,7 +71,7 @@ function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated,
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                         <h3 className="font-medium">Order #{order.id}</h3>
-                        <span className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleString()}</span>
+                        {/* <span className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleString()}</span> */}
                     </div>
                     <div className="mt-2 space-y-1">
                         {order.items.map((it) => (
@@ -69,16 +81,22 @@ function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated,
                             </div>
                         ))}
                     </div>
-                    {(order.accepted_at && !timerFromCreated) && (
-                        <div className="mt-2 text-xs text-muted-foreground">Time since accepted: {elapsed}</div>
-                    )}
-                    {(timerFromCreated) && (
-                        <div className="mt-2 text-xs text-muted-foreground">Time since created: {elapsed}</div>
-                    )}
-                    <div className="mt-3 flex justify-between text-sm font-semibold">
+                    
+                    <div className="mt-2 flex justify-between text-sm font-semibold">
                         <span>Total</span>
                         <span>{total} NOK</span>
                     </div>
+                    {(order.accepted_at && !timerFromCreated) && (
+                        <div className="mt-2 text-xs text-muted-foreground">Has been preparing for {elapsed} minutes</div>
+                    )}
+                    {(timerFromCreated) && (
+                        <div className="mt-2 text-xs text-muted-foreground">Order came in {elapsed} minutes ago</div>
+                    )}
+                    {
+                        order.total_delay_minutes && (
+                            <div className="mt-2 text-xs text-muted-foreground">Has been delayed for {order.total_delay_minutes} minutes</div>
+                        )
+                    }
                     {acceptDeclineActions && (
                         <div className="mt-3 flex gap-2 w-full">
                             <Button size="sm" variant="outline" onClick={() => onDecline && onDecline(order.id)}>Decline</Button>
@@ -103,6 +121,9 @@ export default function Dashboard() {
     const [inProgressOrders, setInProgressOrders] = useState<ApiOrder[]>([]);
     const [awaitingPickupOrders, setAwaitingPickupOrders] = useState<ApiOrder[]>([]);
     const [loading, setLoading] = useState(true);
+    const [delayDialogOpen, setDelayDialogOpen] = useState(false);
+    const [delayOrderId, setDelayOrderId] = useState<number | null>(null);
+    const [delayMinutes, setDelayMinutes] = useState<string>("5");
 
     const fetchOrders = () => {
         setLoading(true);
@@ -115,6 +136,24 @@ export default function Dashboard() {
             })
             .catch((e) => console.error("Failed to load orders", e))
             .finally(() => setLoading(false));
+    };
+
+    const openDelayDialog = (orderId: number) => {
+        setDelayOrderId(orderId);
+        setDelayMinutes("5");
+        setDelayDialogOpen(true);
+    };
+
+    const confirmDelay = async () => {
+        if (!delayOrderId) return;
+        const minutes = parseInt(delayMinutes, 10);
+        if (Number.isNaN(minutes) || minutes < 0) {
+            alert("Please enter a valid number of minutes");
+            return;
+        }
+        await createPrepStep(delayOrderId, "de", minutes);
+        setDelayDialogOpen(false);
+        setDelayOrderId(null);
     };
 
     useEffect(() => {
@@ -168,7 +207,7 @@ export default function Dashboard() {
         }
     };
 
-    const createPrepStep = async (orderId: number, status: "de"|"d"|"c") => {
+    const createPrepStep = async (orderId: number, status: "de"|"d"|"c", delaytime_minutes: number = 0) => {
         try {
             const res = await fetch("/api/preparation_step/", {
                 method: "POST",
@@ -177,7 +216,7 @@ export default function Dashboard() {
                     "Content-Type": "application/json",
                     "X-CSRFToken": csrftoken(),
                 },
-                body: JSON.stringify({ order_id: orderId, status }),
+                body: JSON.stringify({ order_id: orderId, status, delaytime_minutes }),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -218,13 +257,31 @@ export default function Dashboard() {
                             key={o.id}
                             order={o}
                             prepActions
-                            onDelay={(id) => createPrepStep(id, "de")}
+                            onDelay={(id) => openDelayDialog(id)}
                             onDone={(id) => createPrepStep(id, "d")}
                             onCancel={(id) => createPrepStep(id, "c")}
                         />
                     ))
                 )}
             </section>
+            <AlertDialog open={delayDialogOpen} onOpenChange={setDelayDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Add delay</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Enter the number of minutes to delay this order.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="py-2">
+                        <label className="text-sm font-medium">Minutes</label>
+                        <Input type="number" min="0" value={delayMinutes} onChange={(e) => setDelayMinutes(e.target.value)} />
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelay}>Confirm</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             <section className="space-y-3">
                 <h2 className="text-lg font-semibold">Awaiting pickup</h2>
                 {awaitingPickupOrders.length === 0 ? (
