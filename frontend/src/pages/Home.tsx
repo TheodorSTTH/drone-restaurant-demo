@@ -37,7 +37,7 @@ export default function Home() {
     return (
         <div className="flex-1">
             <div className="py-2">
-                <div className="container mx-auto flex justify-between items-center">
+                <div className="container lg:px-10 mx-auto flex justify-between items-center">
                     <img src="/icon.png" alt="Kyte Logo" className="w-6 h-6" />
                     {isAuthed && (
                         <nav className="flex items-center gap-2">
