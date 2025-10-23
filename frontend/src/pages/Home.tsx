@@ -48,16 +48,6 @@ export default function Home() {
             });
     }, []);
 
-    async function logout() {
-        if (!confirm("Are you sure you want to log out?")) return;
-        await fetch("/accounts/logout/", {
-          method: "POST",
-          headers: { "X-CSRFToken": csrftoken() },
-          credentials: "include",
-        });
-        window.location.href = "/";
-    }
-
     return (
         <div className="flex-1">
             <div className="py-2">
