@@ -111,8 +111,14 @@ function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated,
                     {(order.accepted_at && !timerFromCreated) && (
                         <div className="mt-2 text-xs text-muted-foreground">Has been preparing for {elapsed} min</div>
                     )}
-                    {prepActions &&<div className="mt-2 text-xs text-muted-foreground">
-                        Should be ready in {Number(order.projected_preparation_time_minutes) + (order.total_delay_minutes ? order.total_delay_minutes : 0) - elapsed} min
+                    {prepActions && <div className="mt-2 text-xs text-muted-foreground">
+                        {
+                            (() => {
+                                const readyIn = Number(order.projected_preparation_time_minutes) + (order.total_delay_minutes ? order.total_delay_minutes : 0) - elapsed;
+                                if (readyIn > 0) return "Should be ready in " + readyIn + " min";
+                                else return "Should have been ready " + (-readyIn) + " min ago";
+                            })()
+                        }
                     </div>}
                     {showDeliveryCountdown && order.delivery && (
                         <div className="mt-2 text-xs text-muted-foreground space-y-1">
@@ -151,6 +157,7 @@ export default function Dashboard() {
     const [inProgressOrders, setInProgressOrders] = useState<ApiOrder[]>([]);
     const [awaitingPickupOrders, setAwaitingPickupOrders] = useState<ApiOrder[]>([]);
     const [loading, setLoading] = useState(true);
+    const [noRestaurant, setNoRestaurant] = useState<boolean>(false);
     const [delayDialogOpen, setDelayDialogOpen] = useState(false);
     const [delayOrderId, setDelayOrderId] = useState<number | null>(null);
     const [delayMinutes, setDelayMinutes] = useState<string>("5");
@@ -160,11 +167,19 @@ export default function Dashboard() {
         fetch("/api/orders/", { credentials: "include" })
             .then((r) => (r.ok ? r.json() : Promise.reject(r)))
             .then((data) => {
+                setNoRestaurant(false);
                 setNewOrders(data.new_orders || []);
                 setInProgressOrders(data.in_progress_orders || []);
                 setAwaitingPickupOrders(data.awaiting_pickup_orders || []);
             })
-            .catch((e) => console.error("Failed to load orders", e))
+            .catch((e) => {
+                const err: any = e;
+                if (err && typeof err.status === "number" && err.status === 404) {
+                    setNoRestaurant(true);
+                } else {
+                    console.error("Failed to load orders", e);
+                }
+            })
             .finally(() => setLoading(false));
     };
 
@@ -189,8 +204,16 @@ export default function Dashboard() {
     useEffect(() => {
         fetchOrders();
         const onCreated = () => fetchOrders();
+        const onCancelled = () => fetchOrders();
+        const onRefresh = () => fetchOrders();
         window.addEventListener("order:created", onCreated as EventListener);
-        return () => window.removeEventListener("order:created", onCreated as EventListener);
+        window.addEventListener("order:cancelled", onCancelled as EventListener);
+        window.addEventListener("orders:refresh", onRefresh as EventListener);
+        return () => {
+            window.removeEventListener("order:created", onCreated as EventListener);
+            window.removeEventListener("order:cancelled", onCancelled as EventListener);
+            window.removeEventListener("orders:refresh", onRefresh as EventListener);
+        };
     }, []);
 
     const [acceptDialogOpen, setAcceptDialogOpen] = useState(false);
@@ -281,6 +304,18 @@ export default function Dashboard() {
 
     if (loading) {
         return <div className="p-6">Loading orders…</div>;
+    }
+
+    if (noRestaurant) {
+        return (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-muted-foreground">
+              <Package className="h-16 w-16 mx-auto mb-4 opacity-20" />
+              <p className="text-lg">No restaurant linked</p>
+              <p className="text-sm mt-2">Please contact an administrator to link your account to a restaurant.</p>
+            </div>
+          </div>
+        );
     }
 
     return (

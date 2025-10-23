@@ -44,7 +44,7 @@ A **restaurant worker dashboard** used on an iPad to manage **drone-delivered or
 
   * Dev: Vite runs on `http://localhost:5173`; Django trusts that origin via `CSRF_TRUSTED_ORIGINS`.
   * SPA POSTs include `X-CSRFToken` (read from the `csrftoken` cookie).
-* **Redirects:** `LOGIN_REDIRECT_URL = "/"`, `LOGOUT_REDIRECT_URL = "/"`. If a protected API is hit unauthenticated, Django redirects to `/accounts/login/?next=…`.
+* **Redirects:** `LOGIN_REDIRECT_URL = "/"`, `LOGOUT_REDIRECT_URL = "/"`. If a protected API is hit unauthenticated, Django redirects to `/accounts/login/`.
 
 ## Routing (frontend & proxy)
 

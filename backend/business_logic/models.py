@@ -21,6 +21,7 @@ class Product(models.Model):
 class Order(models.Model):
     end_user = models.ForeignKey("EndUser", on_delete=models.CASCADE, related_name="orders")
     created_at = models.DateTimeField(auto_now_add=True)
+    is_cancelled = models.BooleanField(default=False) # Either cancelled by the end user or by the restaurant
     
     def __str__(self):
         return f"Order #{self.pk}"
@@ -85,6 +86,14 @@ class Restaurant(models.Model):
     
     def __str__(self):
         return self.name
+
+class Notification(models.Model):
+    restaurant = models.ForeignKey("Restaurant", on_delete=models.CASCADE, related_name="notifications")
+    created_at = models.DateTimeField(auto_now_add=True)
+    read = models.BooleanField(default=False)
+    message = models.TextField(max_length=1000)
+    
+    def __str__(self): return f"Notification #{self.pk}"
 
 class AuthUserRestaurant(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="auth_user_restaurants")

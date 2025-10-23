@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 export default function Protected({ children }: { children: React.ReactNode }) {
   const [ok, setOk] = useState<boolean | null>(null);
@@ -24,7 +24,7 @@ export default function Protected({ children }: { children: React.ReactNode }) {
   if (ok === null) return <p>Loading…</p>;
   if (!ok) {
     console.log("Protected: Redirecting to login, current path:", loc.pathname);
-    return <Navigate to={`/accounts/login/?next=${encodeURIComponent(loc.pathname)}`} replace />;
+    window.location.href = "/accounts/login/";
   }
   return <>{children}</>;
 }

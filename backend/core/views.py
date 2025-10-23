@@ -275,8 +275,11 @@ def order_cancelled(request):
     except Order.DoesNotExist:
         return _bad(f"Order not found: {order_id}", status=404)
 
-    order.delete()
-    return JsonResponse({"ok": True, "deleted_order_id": order_id})
+    # Mark as cancelled (idempotent)
+    if not order.is_cancelled:
+        order.is_cancelled = True
+        order.save(update_fields=["is_cancelled"])
+    return JsonResponse({"ok": True, "cancelled_order_id": order_id, "is_cancelled": True})
 
 
 def _create_order_answer(request, status_code: str):
@@ -458,7 +461,7 @@ def orders_list(request):
     # Base queryset: orders that include at least one product from this restaurant
     base_qs = (
         Order.objects
-        .filter(order_products__product__restaurant=restaurant)
+        .filter(is_cancelled=False, order_products__product__restaurant=restaurant)
         .distinct()
         .order_by("-created_at")
     )
@@ -607,6 +610,11 @@ def preparation_step_create(request):
                 "estimated_delivery_time": delivery_time,
             },
         )
+    elif status == PreparationStep.PreparationStatus.CANCELLED:
+        # Mark the order as cancelled as part of prep flow
+        if not order.is_cancelled:
+            order.is_cancelled = True
+            order.save(update_fields=["is_cancelled"])
 
     # Provide CSRF cookie for further SPA requests
     get_token(request)
