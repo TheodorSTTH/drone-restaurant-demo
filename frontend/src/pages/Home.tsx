@@ -10,19 +10,6 @@ export default function Home() {
     const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
     const [me, setMe] = useState<{ username?: string } | null>(null);
 
-    async function testProtectedData() {
-        try {
-            const response = await fetch("/api/protected-data/", { credentials: "include" });
-            if (!response.ok) {
-                throw new Error("Failed to fetch protected data");
-            }
-            const data = await response.json();
-            console.log(data);
-        } catch (error) {
-            console.error("Error:", error);
-        }
-    }
-
     useEffect(() => {
         fetch("/api/ping/")
             .then(r => r.json())
@@ -125,12 +112,8 @@ export default function Home() {
                 </div>
             </div>
             <div style={{ fontFamily: "system-ui, sans-serif", padding: 24 }}>
-            <p>Status from backend: <strong>{msg}</strong></p>
-            <p>Signed in: <strong>{isAuthed === null ? "…" : isAuthed ? "yes" : "no"}</strong></p>
-            <br />
-            <Button className="btn" onClick={testProtectedData}>Test Protected Data</Button>
-            <br />
-            <br />
+                <p>Status from backend: <strong>{msg}</strong></p>
+                <p>Signed in: <strong>{isAuthed === null ? "…" : isAuthed ? "yes" : "no"}</strong></p>
             </div>
         </div>
     )
