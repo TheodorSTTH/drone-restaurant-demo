@@ -9,6 +9,7 @@ from business_logic.models import (
     Preparation,
     PreparationStep,
     Delivery,
+    Notification,
 )
 import json
 import uuid
@@ -279,6 +280,16 @@ def order_cancelled(request):
     if not order.is_cancelled:
         order.is_cancelled = True
         order.save(update_fields=["is_cancelled"])
+
+        # Create notification for the restaurant
+        first_op = order.order_products.select_related("product__restaurant").first()
+        if first_op is not None and getattr(first_op.product, "restaurant", None) is not None:
+            restaurant = first_op.product.restaurant
+            items = list(order.order_products.select_related("product").all())
+            items_str = ", ".join([f"{op.quantity}× {op.product.name}" for op in items]) or "order items"
+            msg = f"Order #{order.id} canceled for {items_str}"
+            Notification.objects.create(restaurant=restaurant, message=msg)
+
     return JsonResponse({"ok": True, "cancelled_order_id": order_id, "is_cancelled": True})
 
 
