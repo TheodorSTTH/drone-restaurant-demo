@@ -13,7 +13,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-const menuItems = [
+export const menuItems = [
   {
     title: "Dashboard",
     url: "/dashboard",
@@ -51,18 +51,20 @@ export default function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center justify-center px-2 py-4">
-          <img 
-            src="/kyte-logo-dark.svg" 
-            alt="Kyte Logo" 
-            className="h-6 w-auto group-data-[collapsible=icon]:hidden"
-          />
-          <img 
-            src="/icon.png" 
-            alt="Kyte" 
-            className="h-6-important w-6 hidden group-data-[collapsible=icon]:block"
-          />
-        </div>
+        <Link to="/">
+          <div className="flex items-center justify-center px-2 py-4">
+            <img 
+              src="/kyte-logo-dark.svg" 
+              alt="Kyte Logo" 
+              className="h-6 w-auto group-data-[collapsible=icon]:hidden"
+            />
+            <img 
+              src="/icon.png" 
+              alt="Kyte" 
+              className="h-6-important w-6 hidden group-data-[collapsible=icon]:block"
+            />
+          </div>
+        </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

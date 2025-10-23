@@ -385,6 +385,34 @@ def restaurant_info(request):
 
 
 @login_required
+@require_GET
+def notifications_list(request):
+    """
+    GET /api/notifications/
+    Returns notifications for the authenticated user's restaurant
+    """
+    try:
+        user_restaurant = AuthUserRestaurant.objects.get(user=request.user)
+        restaurant = user_restaurant.restaurant
+    except AuthUserRestaurant.DoesNotExist:
+        return _bad("User is not linked to any restaurant", status=404)
+
+    notifs = restaurant.notifications.order_by("-created_at")[0:50]
+    return JsonResponse({
+        "ok": True,
+        "notifications": [
+            {
+                "id": n.id,
+                "message": n.message,
+                "read": n.read,
+                "created_at": n.created_at.isoformat(),
+            }
+            for n in notifs
+        ]
+    })
+
+
+@login_required
 @transaction.atomic
 def restaurant_update(request):
     """
