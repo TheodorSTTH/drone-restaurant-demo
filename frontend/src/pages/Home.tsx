@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { csrftoken } from "@/csrf";
 import { Link } from "react-router-dom";
 import { User } from "lucide-react";
 import { menuItems } from "@/components/sidebar";
