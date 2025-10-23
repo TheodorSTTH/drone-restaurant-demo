@@ -87,7 +87,7 @@ function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated,
     return (
         <div className="p-4 rounded-lg border bg-card">
             <div className="flex items-start gap-3">
-                <div className="p-2 rounded-md bg-primary/10">
+                <div className="hidden lg:block p-2 rounded-md bg-primary/10">
                     <Package className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -134,16 +134,16 @@ function OrderCard({ order, acceptDeclineActions, prepActions, timerFromCreated,
                         <div className="mt-2 text-xs text-muted-foreground">Order came in {elapsed} min ago</div>
                     )}
                     {acceptDeclineActions && (
-                        <div className="mt-3 flex gap-2 w-full">
-                            <Button size="sm" variant="outline" onClick={() => onDecline && onDecline(order.id)}>Decline</Button>
-                            <Button size="sm" className="grow" variant="default" onClick={() => onAccept && onAccept(order.id)}>Accept</Button>
+                        <div className="mt-3 flex gap-2 w-full flex-wrap">
+                            <Button className="w-full lg:w-max" size="sm" variant="outline" onClick={() => onDecline && onDecline(order.id)}>Decline</Button>
+                            <Button className="w-full lg:w-max grow" size="sm" variant="default" onClick={() => onAccept && onAccept(order.id)}>Accept</Button>
                         </div>
                     )}
                     {prepActions && (
-                        <div className="mt-3 flex gap-2 w-full">
-                            <Button size="sm" variant="secondary" onClick={() => onDelay && onDelay(order.id)}>Delay</Button>
-                            <Button size="sm" variant="destructive" onClick={() => onCancel && confirm("Are you sure you want to cancel this order?") && onCancel(order.id)}>Cancel</Button>
-                            <Button size="sm" className="grow" variant="default" onClick={() => onDone && onDone(order.id)}>Done</Button>
+                        <div className="mt-3 flex gap-2 w-full flex-wrap">
+                            <Button size="sm" className="w-full lg:w-max " variant="secondary" onClick={() => onDelay && onDelay(order.id)}>Delay</Button>
+                            <Button size="sm" className="w-full lg:w-max " variant="destructive" onClick={() => onCancel && confirm("Are you sure you want to cancel this order?") && onCancel(order.id)}>Cancel</Button>
+                            <Button size="sm" className="w-full lg:w-max grow" variant="default" onClick={() => onDone && onDone(order.id)}>Done</Button>
                         </div>
                     )}
                 </div>
@@ -162,8 +162,8 @@ export default function Dashboard() {
     const [delayOrderId, setDelayOrderId] = useState<number | null>(null);
     const [delayMinutes, setDelayMinutes] = useState<string>("5");
 
-    const fetchOrders = () => {
-        setLoading(true);
+    const fetchOrders = (showLoading: boolean = true) => {
+        if (showLoading) setLoading(true);
         fetch("/api/orders/", { credentials: "include" })
             .then((r) => (r.ok ? r.json() : Promise.reject(r)))
             .then((data) => {
@@ -180,7 +180,7 @@ export default function Dashboard() {
                     console.error("Failed to load orders", e);
                 }
             })
-            .finally(() => setLoading(false));
+            .finally(() => { if (showLoading) setLoading(false); });
     };
 
     const openDelayDialog = (orderId: number) => {
@@ -214,6 +214,12 @@ export default function Dashboard() {
             window.removeEventListener("order:cancelled", onCancelled as EventListener);
             window.removeEventListener("orders:refresh", onRefresh as EventListener);
         };
+    }, []);
+
+    // Poll hvert sekund for å holde listene oppdatert uten å vise "Loading"-skjerm
+    useEffect(() => {
+        const id = setInterval(() => fetchOrders(false), 1000);
+        return () => clearInterval(id);
     }, []);
 
     const [acceptDialogOpen, setAcceptDialogOpen] = useState(false);

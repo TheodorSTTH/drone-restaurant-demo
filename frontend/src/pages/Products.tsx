@@ -121,7 +121,7 @@ export default function Products() {
   return (
     <div className="flex gap-4 h-full">
       {/* Venstre kolonne - Produktliste */}
-      <div className="w-80 flex flex-col gap-4">
+      <div className="w-64 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           {/* <h2 className="text-lg font-semibold">Products</h2> */}
           <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

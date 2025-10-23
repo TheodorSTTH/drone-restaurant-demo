@@ -424,6 +424,41 @@ def notifications_list(request):
 
 
 @login_required
+@require_POST
+@transaction.atomic
+def notification_mark_read(request, notification_id: int):
+    try:
+        user_restaurant = AuthUserRestaurant.objects.get(user=request.user)
+        restaurant = user_restaurant.restaurant
+    except AuthUserRestaurant.DoesNotExist:
+        return _bad("User is not linked to any restaurant", status=404)
+
+    try:
+        n = Notification.objects.get(id=notification_id, restaurant=restaurant)
+    except Notification.DoesNotExist:
+        return _bad("Notification not found", status=404)
+
+    if not n.read:
+        n.read = True
+        n.save(update_fields=["read"])
+    return JsonResponse({"ok": True, "id": n.id, "read": n.read})
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def notifications_mark_all_read(request):
+    try:
+        user_restaurant = AuthUserRestaurant.objects.get(user=request.user)
+        restaurant = user_restaurant.restaurant
+    except AuthUserRestaurant.DoesNotExist:
+        return _bad("User is not linked to any restaurant", status=404)
+
+    Notification.objects.filter(restaurant=restaurant, read=False).update(read=True)
+    return JsonResponse({"ok": True})
+
+
+@login_required
 @transaction.atomic
 def restaurant_update(request):
     """
