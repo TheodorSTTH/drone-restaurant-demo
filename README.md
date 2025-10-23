@@ -110,4 +110,6 @@ Core entities in `backend/business_logic/`:
 - Routing: SPA routes with `react-router`; server-rendered auth pages under `/accounts/...`.
 - In prod, NGINX serves the SPA (`try_files ... /index.html`) and proxies `/api/`, `/accounts/`, `/admin/` to Django.
 
-
+## Licensing
+- Code: PolyForm Free Trial 1.0.0 (see LICENSE)
+- Assets: Aviant icons/logos used by permission only (see LICENSE-ASSETS)
